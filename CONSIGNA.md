@@ -537,7 +537,7 @@ además deberán contemplar los siguientes aspectos:
     - Si utilizarían algún plugin que el archivo `project/plugins.sbt` esté
       agregado también.
 - Modularizar es esencial, no pongan todo en el mismo `package` si las
-  construcciones son claramente distintas. <u>Nunca</u> hagan todo en un
+  construcciones son claramente distintas. Nunca hagan todo en un
   archivo.
 
 ### Estilo de código
