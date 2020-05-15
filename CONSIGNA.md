@@ -2,8 +2,8 @@ Laboratorio 3 - Programación Concurrente Usando Actores
 =======================================================
 
 > **Advertencia**: Este laboratorio requiere que **lean** (como se explicará
-> más adelante con mayor detalle). Empiecen por leer **TODA** la consigna
-> <u>antes de preguntar (o empezar a hacer) nada</u>.
+> más adelante con mayor detalle). Empiecen por leer **TODA** la consigna antes
+> de preguntar (o empezar a hacer) nada.
 
 Introducción
 ------------
@@ -140,8 +140,8 @@ con el laboratorio, así que presten atención y no resuelvan todo mecánicament
 > [DeepL](https://www.deepl.com/en/translator) o [Google
 > Translate](https://translate.google.com/)) y será su tarea leerlos.
 > 
-> Como regla general, pueden preguntar lo que quieran, pero si es la respuesta
-> es el primer resultado de Google, serán redirigidos a ella.
+> Como regla general, pueden preguntar lo que quieran, pero si la respuesta es
+> el primer resultado de Google, serán redirigidos a ella.
 
 ### El diseño de los actores
 
@@ -528,6 +528,8 @@ además deberán contemplar los siguientes aspectos:
     - El uso de recursión a la cola, de ser necesario, no es obligatorio pero
       está recomendado.
     - Hagan uso de clases y herencia cada vez que puedan.
+    - Resuelvan las excepciones mediante mónadas (i.e `scala.util.Try` en lugar
+      de `try { ... } catch { ... }`).
 - Agreguen a `build.sbt` cualquier librería extra que decidan utilizar y
   asegúrense de que todo sea compatible: 
     - Vean de tener correctamente configuradas las versiones de Scala y SBT en
@@ -552,4 +554,3 @@ además deberán contemplar los siguientes aspectos:
   documentation**.
 - Por sobre todas las cosas, siempre recuerden
   [KISS](https://en.wikipedia.org/wiki/KISS_principle)
-
