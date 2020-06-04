@@ -39,9 +39,7 @@ object FeedAggregatorServer {
 
   final case class InfoT(title: String, description: String, imagen: Int)
 
-  sealed trait Information
   case class SyncRequest(url: String)
-  case class MakeInfo(feed: xml.Elem)
 
   final case class Auxiliar(unic: Either[Throwable, xml.Elem]) 
 
@@ -51,7 +49,6 @@ object FeedAggregatorServer {
 
   // TODO: This function needs to be moved to the right place
   def syncRequest(path: String): Future[xml.Elem] = {
-    import dispatch._, Defaults._
     val rss = dispatch.Http.default(dispatch.url(path) OK dispatch.as.xml.Elem)
     rss
   }
@@ -68,12 +65,9 @@ object FeedAggregatorServer {
   class Recibidor extends Actor{
     def receive = {
       case SyncRequest(url) =>
-        syncRequest(url).onComplete {
-          case Success(value) => sender ! value
-          case Failure(e) => sender ! e
-        }
-      case MakeInfo(feed) =>
-          val information = FeedInfo(
+          syncRequest(url).onComplete {
+            case Success(feed) =>
+              val information = FeedInfo(
                   ((feed \ "channel") \ "title").headOption.map(_.text).get,
                   ((feed \ "channel") \ "description").headOption.map(_.text),
                   ((feed \ "channel") \\ "item").map(item =>
@@ -82,7 +76,9 @@ object FeedAggregatorServer {
                   ).toList
                 )
           sender ! information
-      case _ => sender ! new Exception
+            case Failure(e) => 
+              println(s"\nNo se esta realizando el syncRequest correctamente ---> $e\n")
+          }
     }
   }
 
@@ -102,15 +98,13 @@ object FeedAggregatorServer {
           get {
             parameter("url".as[String]) { url =>
               implicit val timeout = Timeout(5.second)
-              val f: Future[Any] = recibidor ? SyncRequest(url)
-                
-                onComplete(f) {
-                  case Success(feed: xml.Elem)=>
-                     val aux = recibidor ? MakeInfo(feed)
-                    complete(aux.mapTo[FeedInfo])
+              val feedInfo: Future[Any] = recibidor ? SyncRequest(url)
+                onComplete(feedInfo) {
+                  case Success(feed) =>
+                    complete(feedInfo.mapTo[FeedInfo])
                   case Failure(e) =>
                     complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
-                  case _ => complete("Nothing")
+                  case _ => complete("Nothing") //para testear 
                 }
               }
             }
