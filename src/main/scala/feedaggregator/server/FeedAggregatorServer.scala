@@ -36,6 +36,11 @@ import scala.collection.concurrent.FailedNode
 object FeedAggregatorServer {
   final case class FeedItem(title: String)
   final case class FeedInfo(title: String, description: Option[String], items: List[FeedItem])
+  
+  
+  //Protocolo para el Actor Worker
+  //final case class ItemPure(title: NodeSeq)
+  //final case class ItemImproved(title: String)
 
   final case class InfoT(title: String, description: String, imagen: Int)
 
@@ -44,7 +49,7 @@ object FeedAggregatorServer {
   final case class Auxiliar(unic: Either[Throwable, xml.Elem]) 
 
   // Needed for Unmarshalling
-  implicit val feedItem = jsonFormat2(FeedItem)
+  implicit val feedItem = jsonFormat1(FeedItem)
   implicit val feedInfo = jsonFormat3(FeedInfo)
 
   // TODO: This function needs to be moved to the right place
@@ -71,16 +76,34 @@ object FeedAggregatorServer {
               val information = FeedInfo(
                   ((feed \ "channel") \ "title").headOption.map(_.text).get,
                   ((feed \ "channel") \ "description").headOption.map(_.text),
-                  ((feed \ "channel") \\ "item").map(item =>
+                  ((feed \ "channel") \ "item").map(item =>
                     FeedItem((item \ "title").headOption.map(_.text).get)
+                    //val worker = context.system.actorOf(Props[WorkerItem])
+                    //val itemOK = worker ! ItemPure(item)
+                    //worker ! PoisonPill
+                    //itemOK
                   ).toList
                 )
+                
           requestor ! information
             case Failure(e) => 
               println(s"\nNo se esta realizando el syncRequest correctamente ---> $e\n")
           }
     }
   }
+
+
+/*  class WorkerItem extends Actor{
+      val requestor = sender()
+      def receive = {
+        case ItemPure(elem) =>
+            FeedItem((item \ "title").headOption.map(_.text).get)
+          requestor ! 
+      }
+    }
+*/
+
+
 
   def main(args: Array[String]): Unit = {
     implicit val system = ActorSystem()
