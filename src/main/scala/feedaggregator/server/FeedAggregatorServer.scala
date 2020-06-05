@@ -18,8 +18,8 @@ import akka.util.Timeout
 import dispatch._, Defaults._
 
 import akka.actor.Actor
-import akka.actor.{ActorRef, Props}
-import java.lang.ProcessHandle.Info
+import akka.actor.{ActorRef, Props, PoisonPill}
+//import java.lang.ProcessHandle.Info
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
@@ -101,8 +101,10 @@ object FeedAggregatorServer {
               val feedInfo: Future[Any] = recibidor ? SyncRequest(url)
                 onComplete(feedInfo) {
                   case Success(feed) =>
+                    recibidor ! PoisonPill
                     complete(feedInfo.mapTo[FeedInfo])
                   case Failure(e) =>
+                    recibidor ! PoisonPill
                     complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
                   case _ => complete("Nothing") //para testear 
                 }
