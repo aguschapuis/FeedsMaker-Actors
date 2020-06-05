@@ -34,7 +34,7 @@ import scala.collection.concurrent.FailedNode
 // import scala.util.Random
 
 object FeedAggregatorServer {
-  final case class FeedItem(title: String, link: Option[String])
+  final case class FeedItem(title: String)
   final case class FeedInfo(title: String, description: Option[String], items: List[FeedItem])
 
   final case class InfoT(title: String, description: String, imagen: Int)
@@ -65,17 +65,17 @@ object FeedAggregatorServer {
   class Recibidor extends Actor{
     def receive = {
       case SyncRequest(url) =>
+          val requestor = sender
           syncRequest(url).onComplete {
             case Success(feed) =>
               val information = FeedInfo(
                   ((feed \ "channel") \ "title").headOption.map(_.text).get,
                   ((feed \ "channel") \ "description").headOption.map(_.text),
                   ((feed \ "channel") \\ "item").map(item =>
-                    FeedItem((item \ "title").headOption.map(_.text).get,
-                              (item \ "link").headOption.map(_.text))
+                    FeedItem((item \ "title").headOption.map(_.text).get)
                   ).toList
                 )
-          sender ! information
+          requestor ! information
             case Failure(e) => 
               println(s"\nNo se esta realizando el syncRequest correctamente ---> $e\n")
           }
@@ -106,7 +106,6 @@ object FeedAggregatorServer {
                   case Failure(e) =>
                     recibidor ! PoisonPill
                     complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
-                  case _ => complete("Nothing") //para testear 
                 }
               }
             }
