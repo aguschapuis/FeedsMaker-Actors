@@ -79,7 +79,7 @@ object FeedAggregatorServer {
                   ((feed \ "channel") \ "item").map(item =>
                     FeedItem((item \ "title").headOption.map(_.text).get)
                     //val worker = context.system.actorOf(Props[WorkerItem])
-                    //val itemOK = worker ! ItemPure(item)
+                    //val itemOK: Future[Any] = worker ? ItemPure(item)
                     //worker ! PoisonPill
                     //itemOK
                   ).toList
