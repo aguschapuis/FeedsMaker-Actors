@@ -25,6 +25,7 @@ import scala.util.Success
 import scala.util.Failure
 import scala.concurrent.Future
 import scala.collection.concurrent.FailedNode
+import java.text.SimpleDateFormat
 
 // import scala.util.Try
 // import scala.concurrent.future
@@ -119,20 +120,24 @@ object FeedAggregatorServer {
         },
         path("feed") {
           get {
+            parameter("since".as[String]) { since =>
+              val dateFormat = new SimpleDateFormat(since)
+              complete(dateFormat.toPattern)
+            }
             parameter("url".as[String]) { url =>
               implicit val timeout = Timeout(5.second)
               val feedInfo: Future[Any] = recibidor ? SyncRequest(url)
-                onComplete(feedInfo) {
-                  case Success(feed) =>
-                    recibidor ! PoisonPill
-                    complete(feedInfo.mapTo[FeedInfo])
-                  case Failure(e) =>
-                    recibidor ! PoisonPill
-                    complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
-                }
+              onComplete(feedInfo) {
+                case Success(feed) =>
+                  recibidor ! PoisonPill
+                  complete(feedInfo.mapTo[FeedInfo])
+                case Failure(e) =>
+                  recibidor ! PoisonPill
+                  complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
               }
             }
           }
+        }
       )
 
     val bindingFuture = Http().bindAndHandle(route, "localhost", 8080)
