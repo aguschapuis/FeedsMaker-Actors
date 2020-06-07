@@ -26,13 +26,8 @@ import scala.util.Failure
 import scala.concurrent.Future
 import scala.collection.concurrent.FailedNode
 import java.text.SimpleDateFormat
+import scala.annotation.compileTimeOnly
 
-// import scala.util.Try
-// import scala.concurrent.future
-// import scala.concurrent.Future
-// import scala.concurrent.ExecutionContext.Implicits.global
-// import scala.concurrent.duration._
-// import scala.util.Random
 
 object FeedAggregatorServer {
   final case class FeedItem(title: String)
@@ -62,22 +57,13 @@ object FeedAggregatorServer {
     rss
   }
 
-  // i) ustedes reciben un request del usuario a un endpoint, por ejemplo /feed. 
-  // ii) ustedes hacen un request a la URL para que les devuelvan el feed de un diario X
-  // iii) ustedes procesan ese feed para extrar distintos items, de los cuales sacan sólo algunos campos
-  // iv) compilan una respuesta y se la mandan al usuario
-
-  // Pueden hacer que el proceso  de los distintos items dentro de un mismo feed sea concurrente, 
-  // pero me parece que van a ganar más tiempo si hacen que el proceso de hacer el request y
-  // quedarse esperando a que el endpoint del diario responda
-
 
   class Coordinator extends Actor{
      val requestor = sender()
      def receive = {
        case SyncRequest(url) =>
-           implicit val executionContext = context.system.dispatcher
-           val recibidor = context.actorOf(Props[Recibidor],url)
+          implicit val executionContext = context.system.dispatcher
+          val recibidor = context.actorOf(Props[Recibidor],url)
            
        case DateTimeStr(since) =>
          implicit val timeout = Timeout(5.second)
@@ -169,6 +155,15 @@ object FeedAggregatorServer {
               }
             }
           }
+        },
+        path("subscribe"){
+          post{
+            entity(as[String]) { url => 
+              implicit val timeout = Timeout(5.second)
+              coordinador ? SyncRequest(url)
+              complete(s"Se agrego un nuevo url: ${url} a la lista de feeds") 
+            }
+          } 
         },
         path("feeds"){
           get{
