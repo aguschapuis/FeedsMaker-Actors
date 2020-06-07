@@ -44,8 +44,11 @@ object FeedAggregatorServer {
   //final case class ItemImproved(title: String)
 
   final case class InfoT(title: String, description: String, imagen: Int)
-
+ 
   case class SyncRequest(url: String)
+
+  //Protocolo para Actor Coordinator.
+  case class DateTimeStr(since: String)
 
   final case class Auxiliar(unic: Either[Throwable, xml.Elem]) 
 
@@ -67,7 +70,33 @@ object FeedAggregatorServer {
   // Pueden hacer que el proceso  de los distintos items dentro de un mismo feed sea concurrente, 
   // pero me parece que van a ganar más tiempo si hacen que el proceso de hacer el request y
   // quedarse esperando a que el endpoint del diario responda
-  
+
+
+  class Coordinator extends Actor{
+     val requestor = sender()
+     def receive = {
+       case SyncRequest(url) =>
+           implicit val executionContext = context.system.dispatcher
+           val recibidor = context.actorOf(Props[Recibidor],url)
+           
+       case DateTimeStr(since) =>
+         implicit val timeout = Timeout(5.second)
+         println("Children " + context.children)
+         /*val list = context.children.fold(List()) (list, actorref) => 
+           val feedInfo: Future[Any] = actorref ? SyncRequest(self.path.name)
+           onComplete(feedInfo) {
+             case Success(feed) =>
+               requestor ! PoisonPill
+               List(feed) ++ list
+             case Failure(e) =>
+               requestor ! PoisonPill
+               list
+           }
+         
+         requestor ! list*/
+     }
+  }
+
   class Recibidor extends Actor{
     def receive = {
       case SyncRequest(url) =>
@@ -79,7 +108,7 @@ object FeedAggregatorServer {
                   ((feed \ "channel") \ "description").headOption.map(_.text),
                   ((feed \ "channel") \ "item").map(item =>
                     FeedItem((item \ "title").headOption.map(_.text).get)
-                    //val worker = context.system.actorOf(Props[WorkerItem])
+                    //val worker = context.actorOf(Props[WorkerItem])
                     //val itemOK: Future[Any] = worker ? ItemPure(item)
                     //worker ! PoisonPill
                     //itemOK
@@ -92,6 +121,8 @@ object FeedAggregatorServer {
           }
     }
   }
+
+
 
 
 /*  class WorkerItem extends Actor{
@@ -112,7 +143,8 @@ object FeedAggregatorServer {
     implicit val executionContext = system.dispatcher
 
     val recibidor = system.actorOf(Props[Recibidor], "Recibidor")
-    
+    val coordinador = system.actorOf(Props[Coordinator], "Coordinador")
+
     val route =
       concat (
         path("") {
@@ -137,6 +169,23 @@ object FeedAggregatorServer {
               }
             }
           }
+        },
+        path("feeds"){
+          get{
+            parameter("since".as[String]) { since =>
+              val dateFormat = new SimpleDateFormat(since)
+              implicit val timeout = Timeout(5.second)
+              println(since)
+              println(dateFormat)
+              val feedInfo: Future[Any] = coordinador ? DateTimeStr(dateFormat.toString)
+              onComplete(feedInfo) {
+                case Success(feed) =>
+                  complete(feedInfo.mapTo[FeedInfo])
+                case Failure(e) =>
+                  complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
+              }
+            }
+          }       
         }
       )
 
