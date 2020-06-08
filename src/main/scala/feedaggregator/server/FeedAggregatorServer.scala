@@ -44,9 +44,10 @@ object FeedAggregatorServer {
     since match {
       case None => true
       case Some(value) => {
-        val formatDate: String = "yyyy-MM-dd'T'HH:mm:ss"
-        val sinceFormat = new SimpleDateFormat(formatDate).parse(value)
-        val pubDateFormat = new SimpleDateFormat(formatDate).parse(pubDate)
+        val formatSince: String = "yyyy-MM-dd'T'HH:mm:ss"
+        val formatPubDate: String = "dd MMM yyyy HH:mm:ss z"
+        val sinceFormatted = new SimpleDateFormat(formatDate).parse(value)
+        val pubDateFormatted = new SimpleDateFormat(formatPubDate).parse(pubDate.split(", ")(1))
         pubDateFormat.before(sinceFormat) // true sii pubDateFormat < sinceFormat
       }
     }
