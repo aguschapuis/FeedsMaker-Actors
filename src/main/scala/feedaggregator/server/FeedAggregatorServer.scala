@@ -48,7 +48,7 @@ object FeedAggregatorServer {
         val formatPubDate: String = "dd MMM yyyy HH:mm:ss z"
         val sinceFormatted = new SimpleDateFormat(formatDate).parse(value)
         val pubDateFormatted = new SimpleDateFormat(formatPubDate).parse(pubDate.split(", ")(1))
-        pubDateFormat.before(sinceFormat) // true sii pubDateFormat < sinceFormat
+        pubDateFormatted.before(sinceFormatted) // true sii pubDateFormatted < sinceFormatted
       }
     }
   }
