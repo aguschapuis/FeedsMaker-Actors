@@ -40,6 +40,17 @@ object FeedAggregatorServer {
                             items: List[FeedItem]
                             )
   
+  def cmpDates(pubDate: String, since: Option[String]): Boolean = {
+    since match {
+      case None => true
+      case Some(value) => {
+        val formatDate: String = "yyyy-MM-dd'T'HH:mm:ss"
+        val sinceFormat = new SimpleDateFormat(formatDate).parse(value)
+        val pubDateFormat = new SimpleDateFormat(formatDate).parse(pubDate)
+        pubDateFormat.before(sinceFormat) // true sii pubDateFormat < sinceFormat
+      }
+    }
+  }
   
   //Protocolo para el Actor Worker
   //final case class ItemPure(title: NodeSeq)
@@ -110,7 +121,7 @@ object FeedAggregatorServer {
                     //val itemOK: Future[Any] = worker ? ItemPure(item)
                     //worker ! PoisonPill
                     //itemOK
-                  ).toList
+                  ).toList.filter(item => cmpDates(item.pubDate, since))
               )
                 
           requestor ! information
