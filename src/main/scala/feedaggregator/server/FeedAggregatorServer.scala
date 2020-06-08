@@ -30,8 +30,15 @@ import scala.annotation.compileTimeOnly
 
 
 object FeedAggregatorServer {
-  final case class FeedItem(title: String)
-  final case class FeedInfo(title: String, description: Option[String], items: List[FeedItem])
+  final case class FeedItem(title: String,
+                            link: String,
+                            description: Option[String],
+                            pubDate: String
+                            )
+  final case class FeedInfo(title: String,
+                            description: Option[String],
+                            items: List[FeedItem]
+                            )
   
   
   //Protocolo para el Actor Worker
@@ -40,7 +47,7 @@ object FeedAggregatorServer {
 
   final case class InfoT(title: String, description: String, imagen: Int)
  
-  case class SyncRequest(url: String)
+  case class SyncRequest(url: String, since: Option[String])
 
   //Protocolo para Actor Coordinator.
   case class DateTimeStr(since: String)
@@ -48,7 +55,7 @@ object FeedAggregatorServer {
   final case class Auxiliar(unic: Either[Throwable, xml.Elem]) 
 
   // Needed for Unmarshalling
-  implicit val feedItem = jsonFormat1(FeedItem)
+  implicit val feedItem = jsonFormat4(FeedItem)
   implicit val feedInfo = jsonFormat3(FeedInfo)
 
   // TODO: This function needs to be moved to the right place
@@ -61,7 +68,7 @@ object FeedAggregatorServer {
   class Coordinator extends Actor{
      val requestor = sender()
      def receive = {
-       case SyncRequest(url) =>
+       case SyncRequest(url, since) =>
           implicit val executionContext = context.system.dispatcher
           val recibidor = context.actorOf(Props[Recibidor],url)
            
@@ -85,7 +92,7 @@ object FeedAggregatorServer {
 
   class Recibidor extends Actor{
     def receive = {
-      case SyncRequest(url) =>
+      case SyncRequest(url, since) =>
           val requestor = sender
           syncRequest(url).onComplete {
             case Success(feed) =>
@@ -93,13 +100,18 @@ object FeedAggregatorServer {
                   ((feed \ "channel") \ "title").headOption.map(_.text).get,
                   ((feed \ "channel") \ "description").headOption.map(_.text),
                   ((feed \ "channel") \ "item").map(item =>
-                    FeedItem((item \ "title").headOption.map(_.text).get)
+                    FeedItem(
+                      (item \ "title").headOption.map(_.text).get,
+                      (item \ "link").headOption.map(_.text).get,
+                      (item \ "description").headOption.map(_.text),
+                      (item \ "pubDate").headOption.map(_.text).get
+                    )
                     //val worker = context.actorOf(Props[WorkerItem])
                     //val itemOK: Future[Any] = worker ? ItemPure(item)
                     //worker ! PoisonPill
                     //itemOK
                   ).toList
-                )
+              )
                 
           requestor ! information
             case Failure(e) => 
@@ -138,13 +150,9 @@ object FeedAggregatorServer {
         },
         path("feed") {
           get {
-            parameter("since".as[String]) { since =>
-              val dateFormat = new SimpleDateFormat(since)
-              complete(dateFormat.toPattern)
-            }
-            parameter("url".as[String]) { url =>
+            parameter("url".as[String], "since".?) { (url, since) =>
               implicit val timeout = Timeout(5.second)
-              val feedInfo: Future[Any] = recibidor ? SyncRequest(url)
+              val feedInfo: Future[Any] = recibidor ? SyncRequest(url, since)
               onComplete(feedInfo) {
                 case Success(feed) =>
                   recibidor ! PoisonPill
@@ -160,7 +168,7 @@ object FeedAggregatorServer {
           post{
             entity(as[String]) { url => 
               implicit val timeout = Timeout(5.second)
-              coordinador ? SyncRequest(url)
+              coordinador ? SyncRequest(url, since)
               complete(s"Se agrego un nuevo url: ${url} a la lista de feeds") 
             }
           } 
