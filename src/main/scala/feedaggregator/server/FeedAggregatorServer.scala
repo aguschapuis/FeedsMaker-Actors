@@ -16,10 +16,8 @@ import akka.pattern.ask
 import akka.util.Timeout
 
 import dispatch._, Defaults._
-
 import akka.actor.Actor
 import akka.actor.{ActorRef, Props, PoisonPill}
-//import java.lang.ProcessHandle.Info
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
@@ -49,7 +47,7 @@ object FeedAggregatorServer {
       case Some(value) => {
         val formatSince: String = "yyyy-MM-dd'T'HH:mm:ss"
         val formatPubDate: String = "dd MMM yyyy HH:mm:ss z"
-        val sinceFormatted = new SimpleDateFormat(formatDate).parse(value)
+        val sinceFormatted = new SimpleDateFormat(formatSince).parse(value)
         val pubDateFormatted = new SimpleDateFormat(formatPubDate).parse(pubDate.split(", ")(1))
         pubDateFormatted.before(sinceFormatted) // true sii pubDateFormatted < sinceFormatted
       }
@@ -91,19 +89,15 @@ object FeedAggregatorServer {
            
        case DateTimeStr(since) =>
          implicit val timeout = Timeout(5.second)
-         println(context.children.map(actorref => {
-         val feedInfo: Future[Any] = actorref ? SyncRequest(actorref.path.name)
-         feedInfo}
-         ))
-         
          val list = context.children.map(actorref => {
-                    val feedInfo: Future[Any] = actorref ? SyncRequest(actorref.path.name)
-                    feedInfo.onComplete {
-                      case Success(feed) =>
-                        feed
-                      case Failure(e) =>
-                        e
-                    }
+            val feedInfo: Future[Any] = actorref ? SyncRequest(
+                                            actorref.path.name, Some(since))
+            feedInfo.onComplete {
+              case Success(feed) =>
+                feed
+              case Failure(e) =>
+                e
+            }
          })
        requestor ! ListFeedItem(list.toList.asInstanceOf[List[FeedInfo]])
      }
@@ -158,7 +152,6 @@ object FeedAggregatorServer {
     implicit val system = ActorSystem()
     // needed for the future flatMap/onComplete in the end
     implicit val executionContext = system.dispatcher
-
     val recibidor = system.actorOf(Props[Recibidor], "Recibidor")
     val coordinador = system.actorOf(Props[Coordinator], "Coordinador")
 
@@ -187,7 +180,7 @@ object FeedAggregatorServer {
           post{
             entity(as[String]) { url => 
               implicit val timeout = Timeout(5.second)
-              coordinador ? SyncRequest(url, since)
+              //coordinador ? SyncRequest(url, since)
               complete(s"Se agrego un nuevo url: ${url} a la lista de feeds") 
             }
           } 
@@ -195,11 +188,10 @@ object FeedAggregatorServer {
         path("feeds"){
           get{
             parameter("since".as[String]) { since =>
-              val dateFormat = new SimpleDateFormat(since)
+              //val sinceFormatted = new SimpleDateFormat(formatDate).parse(value)
+              //val dateFormat = new SimpleDateFormat(since)
               implicit val timeout = Timeout(5.second)
-              println(since)
-              println(dateFormat)
-              val listFeedItem: Future[Any] = coordinador ? DateTimeStr(dateFormat.toString)
+              val listFeedItem: Future[Any] = coordinador ? DateTimeStr(since)
               onComplete(listFeedItem) {
                 case Success(feed) =>
                   complete(listFeedItem.mapTo[List[FeedItem]])
