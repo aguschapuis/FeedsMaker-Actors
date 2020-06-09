@@ -35,6 +35,7 @@ import java.text.SimpleDateFormat
 // import scala.util.Random
 
 object FeedAggregatorServer {
+  final case class ListFeedItem(list: List[FeedInfo])
   final case class FeedItem(title: String)
   final case class FeedInfo(title: String, description: Option[String], items: List[FeedItem])
   
@@ -53,6 +54,7 @@ object FeedAggregatorServer {
   final case class Auxiliar(unic: Either[Throwable, xml.Elem]) 
 
   // Needed for Unmarshalling
+  //implicit val listFeedItem = jsonFormat1(ListFeedItem)
   implicit val feedItem = jsonFormat1(FeedItem)
   implicit val feedInfo = jsonFormat3(FeedInfo)
 
@@ -81,19 +83,21 @@ object FeedAggregatorServer {
            
        case DateTimeStr(since) =>
          implicit val timeout = Timeout(5.second)
-         println("Children " + context.children)
-         /*val list = context.children.fold(List()) (list, actorref) => 
-           val feedInfo: Future[Any] = actorref ? SyncRequest(self.path.name)
-           onComplete(feedInfo) {
-             case Success(feed) =>
-               requestor ! PoisonPill
-               List(feed) ++ list
-             case Failure(e) =>
-               requestor ! PoisonPill
-               list
-           }
+         println(context.children.map(actorref => {
+         val feedInfo: Future[Any] = actorref ? SyncRequest(actorref.path.name)
+         feedInfo}
+         ))
          
-         requestor ! list*/
+         val list = context.children.map(actorref => {
+                    val feedInfo: Future[Any] = actorref ? SyncRequest(actorref.path.name)
+                    feedInfo.onComplete {
+                      case Success(feed) =>
+                        feed
+                      case Failure(e) =>
+                        e
+                    }
+         })
+       requestor ! ListFeedItem(list.toList.asInstanceOf[List[FeedInfo]])
      }
   }
 
@@ -177,10 +181,10 @@ object FeedAggregatorServer {
               implicit val timeout = Timeout(5.second)
               println(since)
               println(dateFormat)
-              val feedInfo: Future[Any] = coordinador ? DateTimeStr(dateFormat.toString)
-              onComplete(feedInfo) {
+              val listFeedItem: Future[Any] = coordinador ? DateTimeStr(dateFormat.toString)
+              onComplete(listFeedItem) {
                 case Success(feed) =>
-                  complete(feedInfo.mapTo[FeedInfo])
+                  complete(listFeedItem.mapTo[List[FeedItem]])
                 case Failure(e) =>
                   complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
               }
