@@ -15,7 +15,7 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.pattern.ask
 import akka.util.Timeout
 
-import dispatch._, Defaults._
+
 import akka.actor.Actor
 import akka.actor.{ActorRef, Props, PoisonPill}
 import scala.util.Try
@@ -75,6 +75,7 @@ object FeedAggregatorServer {
 
   // TODO: This function needs to be moved to the right place
   def syncRequest(path: String): Future[xml.Elem] = {
+    import dispatch._, Defaults._
     val rss = dispatch.Http.default(dispatch.url(path) OK dispatch.as.xml.Elem)
     rss
   }
@@ -92,6 +93,7 @@ object FeedAggregatorServer {
          val list = context.children.map(actorref => {
             val feedInfo: Future[Any] = actorref ? SyncRequest(
                                             actorref.path.name, Some(since))
+            import dispatch._, Defaults._
             feedInfo.onComplete {
               case Success(feed) =>
                 feed
@@ -104,6 +106,7 @@ object FeedAggregatorServer {
   }
 
   class Recibidor extends Actor{
+    import dispatch._, Defaults._
     def receive = {
       case SyncRequest(url, since) =>
           val requestor = sender
@@ -180,7 +183,7 @@ object FeedAggregatorServer {
           post{
             entity(as[String]) { url => 
               implicit val timeout = Timeout(5.second)
-              //coordinador ? SyncRequest(url, since)
+              coordinador ? SyncRequest(url, None)
               complete(s"Se agrego un nuevo url: ${url} a la lista de feeds") 
             }
           } 
