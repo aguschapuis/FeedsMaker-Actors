@@ -26,19 +26,35 @@ import scala.util.Failure
 import scala.concurrent.Future
 import scala.collection.concurrent.FailedNode
 import java.text.SimpleDateFormat
+import scala.annotation.compileTimeOnly
 
-// import scala.util.Try
-// import scala.concurrent.future
-// import scala.concurrent.Future
-// import scala.concurrent.ExecutionContext.Implicits.global
-// import scala.concurrent.duration._
-// import scala.util.Random
 
 object FeedAggregatorServer {
+
   final case class ListFeedItem(list: List[FeedInfo])
-  final case class FeedItem(title: String)
-  final case class FeedInfo(title: String, description: Option[String], items: List[FeedItem])
+  final case class FeedItem(title: String,
+                            link: String,
+                            description: Option[String],
+                            pubDate: String
+                            )
+  final case class FeedInfo(title: String,
+                            description: Option[String],
+                            items: List[FeedItem]
+                            )
+
   
+  def cmpDates(pubDate: String, since: Option[String]): Boolean = {
+    since match {
+      case None => true
+      case Some(value) => {
+        val formatSince: String = "yyyy-MM-dd'T'HH:mm:ss"
+        val formatPubDate: String = "dd MMM yyyy HH:mm:ss z"
+        val sinceFormatted = new SimpleDateFormat(formatDate).parse(value)
+        val pubDateFormatted = new SimpleDateFormat(formatPubDate).parse(pubDate.split(", ")(1))
+        pubDateFormatted.before(sinceFormatted) // true sii pubDateFormatted < sinceFormatted
+      }
+    }
+  }
   
   //Protocolo para el Actor Worker
   //final case class ItemPure(title: NodeSeq)
@@ -46,7 +62,7 @@ object FeedAggregatorServer {
 
   final case class InfoT(title: String, description: String, imagen: Int)
  
-  case class SyncRequest(url: String)
+  case class SyncRequest(url: String, since: Option[String])
 
   //Protocolo para Actor Coordinator.
   case class DateTimeStr(since: String)
@@ -54,8 +70,9 @@ object FeedAggregatorServer {
   final case class Auxiliar(unic: Either[Throwable, xml.Elem]) 
 
   // Needed for Unmarshalling
+
   //implicit val listFeedItem = jsonFormat1(ListFeedItem)
-  implicit val feedItem = jsonFormat1(FeedItem)
+  implicit val feedItem = jsonFormat4(FeedItem)
   implicit val feedInfo = jsonFormat3(FeedInfo)
 
   // TODO: This function needs to be moved to the right place
@@ -64,22 +81,13 @@ object FeedAggregatorServer {
     rss
   }
 
-  // i) ustedes reciben un request del usuario a un endpoint, por ejemplo /feed. 
-  // ii) ustedes hacen un request a la URL para que les devuelvan el feed de un diario X
-  // iii) ustedes procesan ese feed para extrar distintos items, de los cuales sacan sólo algunos campos
-  // iv) compilan una respuesta y se la mandan al usuario
-
-  // Pueden hacer que el proceso  de los distintos items dentro de un mismo feed sea concurrente, 
-  // pero me parece que van a ganar más tiempo si hacen que el proceso de hacer el request y
-  // quedarse esperando a que el endpoint del diario responda
-
 
   class Coordinator extends Actor{
      val requestor = sender()
      def receive = {
-       case SyncRequest(url) =>
-           implicit val executionContext = context.system.dispatcher
-           val recibidor = context.actorOf(Props[Recibidor],url)
+       case SyncRequest(url, since) =>
+          implicit val executionContext = context.system.dispatcher
+          val recibidor = context.actorOf(Props[Recibidor],url)
            
        case DateTimeStr(since) =>
          implicit val timeout = Timeout(5.second)
@@ -103,7 +111,7 @@ object FeedAggregatorServer {
 
   class Recibidor extends Actor{
     def receive = {
-      case SyncRequest(url) =>
+      case SyncRequest(url, since) =>
           val requestor = sender
           syncRequest(url).onComplete {
             case Success(feed) =>
@@ -111,13 +119,18 @@ object FeedAggregatorServer {
                   ((feed \ "channel") \ "title").headOption.map(_.text).get,
                   ((feed \ "channel") \ "description").headOption.map(_.text),
                   ((feed \ "channel") \ "item").map(item =>
-                    FeedItem((item \ "title").headOption.map(_.text).get)
+                    FeedItem(
+                      (item \ "title").headOption.map(_.text).get,
+                      (item \ "link").headOption.map(_.text).get,
+                      (item \ "description").headOption.map(_.text),
+                      (item \ "pubDate").headOption.map(_.text).get
+                    )
                     //val worker = context.actorOf(Props[WorkerItem])
                     //val itemOK: Future[Any] = worker ? ItemPure(item)
                     //worker ! PoisonPill
                     //itemOK
-                  ).toList
-                )
+                  ).toList.filter(item => cmpDates(item.pubDate, since))
+              )
                 
           requestor ! information
             case Failure(e) => 
@@ -156,13 +169,9 @@ object FeedAggregatorServer {
         },
         path("feed") {
           get {
-            parameter("since".as[String]) { since =>
-              val dateFormat = new SimpleDateFormat(since)
-              complete(dateFormat.toPattern)
-            }
-            parameter("url".as[String]) { url =>
+            parameter("url".as[String], "since".?) { (url, since) =>
               implicit val timeout = Timeout(5.second)
-              val feedInfo: Future[Any] = recibidor ? SyncRequest(url)
+              val feedInfo: Future[Any] = recibidor ? SyncRequest(url, since)
               onComplete(feedInfo) {
                 case Success(feed) =>
                   recibidor ! PoisonPill
@@ -173,6 +182,15 @@ object FeedAggregatorServer {
               }
             }
           }
+        },
+        path("subscribe"){
+          post{
+            entity(as[String]) { url => 
+              implicit val timeout = Timeout(5.second)
+              coordinador ? SyncRequest(url, since)
+              complete(s"Se agrego un nuevo url: ${url} a la lista de feeds") 
+            }
+          } 
         },
         path("feeds"){
           get{
