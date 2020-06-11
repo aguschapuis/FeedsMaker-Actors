@@ -74,7 +74,7 @@ object FeedAggregatorServer {
   //implicit val listFeedItem = jsonFormat1(ListFeedItem)
   implicit val feedItem = jsonFormat4(FeedItem)
   implicit val feedInfo = jsonFormat3(FeedInfo)
-
+  implicit val listfeedItem = jsonFormat1(ListFeedItem)
   // TODO: This function needs to be moved to the right place
   def syncRequest(path: String): Future[xml.Elem] = {
     import dispatch._, Defaults._
@@ -92,25 +92,24 @@ object FeedAggregatorServer {
                                           url.replaceAll("/", "_"))
            
        case DateTimeStr(since) =>
-         //import dispatch._, Defaults._
          implicit val timeout = Timeout(10.second)
-         val list = context.children.map(actorref => {
+         import dispatch._, Defaults._
+         val list = context.children.toList.map(actorref => {
+            var feedBack : Any = null
             implicit val timeout = Timeout(10.second)
-            println( "Actor : " + actorref.path.name)
-            val feedInfo: Future[Any] = actorref ? SyncRequest(
+            val feedInfo = actorref ? SyncRequest(
                            actorref.path.name.replaceAll("_", "/"), Some(since))
 
-            import dispatch._, Defaults._
             feedInfo.onComplete {
               case Success(feed) =>
-                feed.asInstanceOf[FeedInfo]
+                feedBack = feed
               case Failure(e) =>
                 e
 
             }
-            feedInfo.value.asInstanceOf[FeedInfo]
+            feedBack.asInstanceOf[FeedInfo]
          })
-         sender() ! ListFeedItem(list.toList.asInstanceOf[List[FeedInfo]])
+         sender() ! ListFeedItem(list)
      }
   }
 
@@ -205,7 +204,7 @@ object FeedAggregatorServer {
                                                                       since.get)
               onComplete(listFeedItem) {
                 case Success(feed) =>
-                  complete(listFeedItem.mapTo[List[FeedItem]])
+                  complete(listFeedItem.mapTo[ListFeedItem])
                 case Failure(e) =>
                   complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
               }
