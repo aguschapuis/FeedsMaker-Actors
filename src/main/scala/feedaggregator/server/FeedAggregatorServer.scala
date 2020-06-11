@@ -10,6 +10,7 @@ import scala.io.StdIn
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
+
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 
 import akka.pattern.ask
@@ -24,6 +25,7 @@ import scala.util.Failure
 import scala.concurrent.Future
 import scala.collection.concurrent.FailedNode
 import java.text.SimpleDateFormat
+import java.lang.String
 import scala.annotation.compileTimeOnly
 
 
@@ -86,22 +88,29 @@ object FeedAggregatorServer {
      def receive = {
        case SyncRequest(url, since) =>
           implicit val executionContext = context.system.dispatcher
-          val recibidor = context.actorOf(Props[Recibidor],url)
+          val recibidor = context.actorOf(Props[Recibidor],
+                                          url.replaceAll("/", "_"))
            
        case DateTimeStr(since) =>
-         implicit val timeout = Timeout(5.second)
+         //import dispatch._, Defaults._
+         implicit val timeout = Timeout(10.second)
          val list = context.children.map(actorref => {
+            implicit val timeout = Timeout(10.second)
+            println( "Actor : " + actorref.path.name)
             val feedInfo: Future[Any] = actorref ? SyncRequest(
-                                            actorref.path.name, Some(since))
+                           actorref.path.name.replaceAll("_", "/"), Some(since))
+
             import dispatch._, Defaults._
             feedInfo.onComplete {
               case Success(feed) =>
-                feed
+                feed.asInstanceOf[FeedInfo]
               case Failure(e) =>
                 e
+
             }
+            feedInfo.value.asInstanceOf[FeedInfo]
          })
-       requestor ! ListFeedItem(list.toList.asInstanceOf[List[FeedInfo]])
+         sender() ! ListFeedItem(list.toList.asInstanceOf[List[FeedInfo]])
      }
   }
 
@@ -109,7 +118,7 @@ object FeedAggregatorServer {
     import dispatch._, Defaults._
     def receive = {
       case SyncRequest(url, since) =>
-          val requestor = sender
+          val requestor = sender()
           syncRequest(url).onComplete {
             case Success(feed) =>
               val information = FeedInfo(
@@ -128,7 +137,7 @@ object FeedAggregatorServer {
                     //itemOK
                   ).toList.filter(item => cmpDates(item.pubDate, since))
               )
-                
+
           requestor ! information
             case Failure(e) => 
               println(s"\nNo se esta realizando el syncRequest correctamente ---> $e\n")
@@ -152,6 +161,7 @@ object FeedAggregatorServer {
 
 
   def main(args: Array[String]): Unit = {
+    
     implicit val system = ActorSystem()
     // needed for the future flatMap/onComplete in the end
     implicit val executionContext = system.dispatcher
@@ -170,10 +180,8 @@ object FeedAggregatorServer {
               val feedInfo: Future[Any] = recibidor ? SyncRequest(url, since)
               onComplete(feedInfo) {
                 case Success(feed) =>
-                  recibidor ! PoisonPill
                   complete(feedInfo.mapTo[FeedInfo])
                 case Failure(e) =>
-                  recibidor ! PoisonPill
                   complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
               }
             }
@@ -181,20 +189,20 @@ object FeedAggregatorServer {
         },
         path("subscribe"){
           post{
-            entity(as[String]) { url => 
+            entity(as[Map[String,String]]) { url =>  //as[String] 
               implicit val timeout = Timeout(5.second)
-              coordinador ? SyncRequest(url, None)
-              complete(s"Se agrego un nuevo url: ${url} a la lista de feeds") 
+              coordinador ! SyncRequest(url.get("url").get, None)
+              complete(s"Se agrego un nuevo url: " + 
+                       url.get("url").get + " a la lista de feeds") 
             }
           } 
         },
         path("feeds"){
           get{
-            parameter("since".as[String]) { since =>
-              //val sinceFormatted = new SimpleDateFormat(formatDate).parse(value)
-              //val dateFormat = new SimpleDateFormat(since)
-              implicit val timeout = Timeout(5.second)
-              val listFeedItem: Future[Any] = coordinador ? DateTimeStr(since)
+            parameter("since".?) { since =>
+              implicit val timeout = Timeout(10.second)
+              val listFeedItem: Future[Any] = coordinador ? DateTimeStr(
+                                                                      since.get)
               onComplete(listFeedItem) {
                 case Success(feed) =>
                   complete(listFeedItem.mapTo[List[FeedItem]])
@@ -202,7 +210,7 @@ object FeedAggregatorServer {
                   complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
               }
             }
-          }       
+          }
         }
       )
 
