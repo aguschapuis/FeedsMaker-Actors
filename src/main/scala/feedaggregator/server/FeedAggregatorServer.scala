@@ -55,10 +55,7 @@ object FeedAggregatorServer {
       }
     }
   }
-  
-  //Protocolo para el Actor Worker
-  //final case class ItemPure(title: NodeSeq)
-  //final case class ItemImproved(title: String)
+
 
   final case class InfoT(title: String, description: String, imagen: Int)
  
@@ -84,6 +81,7 @@ object FeedAggregatorServer {
 
 
   class Coordinator extends Actor{
+     import context.dispatcher
      val requestor = sender()
      def receive = {
        case SyncRequest(url, since) =>
@@ -93,7 +91,6 @@ object FeedAggregatorServer {
            
        case DateTimeStr(since) =>
          implicit val timeout = Timeout(10.second)
-         import dispatch._, Defaults._
          val list = context.children.toList.map(actorref => {
             var feedBack : Any = null
             implicit val timeout = Timeout(10.second)
@@ -105,16 +102,15 @@ object FeedAggregatorServer {
                 feedBack = feed
               case Failure(e) =>
                 e
-
             }
-            feedBack.asInstanceOf[FeedInfo]
+            feedBack.asInstanceOf[FeedInfo] 
          })
          sender() ! ListFeedItem(list)
      }
   }
 
   class Recibidor extends Actor{
-    import dispatch._, Defaults._
+    import context.dispatcher
     def receive = {
       case SyncRequest(url, since) =>
           val requestor = sender()
@@ -130,10 +126,6 @@ object FeedAggregatorServer {
                       (item \ "description").headOption.map(_.text),
                       (item \ "pubDate").headOption.map(_.text).get
                     )
-                    //val worker = context.actorOf(Props[WorkerItem])
-                    //val itemOK: Future[Any] = worker ? ItemPure(item)
-                    //worker ! PoisonPill
-                    //itemOK
                   ).toList.filter(item => cmpDates(item.pubDate, since))
               )
 
@@ -143,19 +135,6 @@ object FeedAggregatorServer {
           }
     }
   }
-
-
-
-
-/*  class WorkerItem extends Actor{
-      val requestor = sender()
-      def receive = {
-        case ItemPure(elem) =>
-            FeedItem((item \ "title").headOption.map(_.text).get)
-          requestor ! 
-      }
-    }
-*/
 
 
 
