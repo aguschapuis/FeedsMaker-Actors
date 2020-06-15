@@ -66,7 +66,7 @@ object FeedAggregatorServer {
 
   final case class InfoT(title: String, description: String, imagen: Int)
  
-  case class SyncRequest(url: String, since: Option[String])
+  case class AsyncRequest(url: String, since: Option[String])
   
   case class UrlNotFound(e:Throwable)
   case class FeedDone(e:FeedInfo)
@@ -78,7 +78,7 @@ object FeedAggregatorServer {
   implicit val feedInfo = jsonFormat3(FeedInfo)
   implicit val listfeedItem = jsonFormat1(ListFeedItem)
   // TODO: This function needs to be moved to the right place
-  def syncRequest(path: String): Try[Future[xml.Elem]] = {
+  def asyncRequest(path: String): Try[Future[xml.Elem]] = {
     import dispatch._, Defaults._
     Try(dispatch.Http.default(dispatch.url(path) OK dispatch.as.xml.Elem))
   }
@@ -88,7 +88,7 @@ object FeedAggregatorServer {
      import context.dispatcher
      val requestor = sender()
      def receive = {
-       case SyncRequest(url, since) =>
+       case AsyncRequest(url, since) =>
           implicit val executionContext = context.system.dispatcher
           val requester = context.actorOf(Props[Requester],
                                           url.replaceAll("/", "_"))
@@ -99,7 +99,7 @@ object FeedAggregatorServer {
           val list: Future[List[FeedInfo]] = Future( context.children.toList.map(actorref => {
             var feedBack : Any = null
             implicit val timeout = Timeout(10.second)
-            val feedInfo = actorref ? SyncRequest(
+            val feedInfo = actorref ? AsyncRequest(
                             actorref.path.name.replaceAll("_", "/"), since)
             feedInfo.onComplete {
               case Success(feed) =>
@@ -126,9 +126,9 @@ object FeedAggregatorServer {
   class Requester extends Actor{
     import context.dispatcher
     def receive = {
-      case SyncRequest(url, since) =>
+      case AsyncRequest(url, since) =>
           val requestor = sender()
-          syncRequest(url) match {
+          asyncRequest(url) match {
             case Failure(exception) => requestor ! UrlNotFound(exception)
             case Success(value) => 
             value.onComplete {
@@ -172,7 +172,7 @@ object FeedAggregatorServer {
             get {
               parameter("url".as[String], "since".?) { (url, since) =>
                 implicit val timeout = Timeout(5.second)
-                val feedInfo: Future[Any] = requester ? SyncRequest(url, since)
+                val feedInfo: Future[Any] = requester ? AsyncRequest(url, since)
                 onComplete(feedInfo) {
                   case Success(feed) =>
                     feed match {
@@ -205,7 +205,7 @@ object FeedAggregatorServer {
               entity(as[Map[String,String]]) { url =>  //as[String] 
                 implicit val timeout = Timeout(5.second)
                 val urlFinal = url.get("url").get
-                coordinador ! SyncRequest(urlFinal, None)
+                coordinador ! AsyncRequest(urlFinal, None)
                 complete(StatusCodes.OK -> s"The url: $urlFinal is added to the feed list") 
               }
             } 
