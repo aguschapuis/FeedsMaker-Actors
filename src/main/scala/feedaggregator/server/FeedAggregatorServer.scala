@@ -33,6 +33,8 @@ import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server._
 import Directives._
 import java.sql.Date
+import java.util.concurrent.CompletionException
+
 
 object FeedAggregatorServer {
 
@@ -66,6 +68,8 @@ object FeedAggregatorServer {
  
   case class SyncRequest(url: String, since: Option[String])
   
+  case class UrlNotFound(e:Throwable)
+  case class FeedDone(e:FeedInfo)
   //Protocolo para Actor Coordinator.
   case class DateTimeStr(since: Option[String])
 
@@ -74,10 +78,9 @@ object FeedAggregatorServer {
   implicit val feedInfo = jsonFormat3(FeedInfo)
   implicit val listfeedItem = jsonFormat1(ListFeedItem)
   // TODO: This function needs to be moved to the right place
-  def syncRequest(path: String): Future[xml.Elem] = {
+  def syncRequest(path: String): Try[Future[xml.Elem]] = {
     import dispatch._, Defaults._
-    val rss = dispatch.Http.default(dispatch.url(path) OK dispatch.as.xml.Elem)
-    rss
+    Try(dispatch.Http.default(dispatch.url(path) OK dispatch.as.xml.Elem))
   }
 
 
@@ -116,17 +119,21 @@ object FeedAggregatorServer {
             case Success(finallist) => sender() ! ListFeedItem(finallist)
             case Failure(e) => sender() ! e
           }
-     }
-  }
+     
+      }
+     }  
 
   class Recibidor extends Actor{
     import context.dispatcher
     def receive = {
       case SyncRequest(url, since) =>
           val requestor = sender()
-          syncRequest(url).onComplete {
-            case Success(feed) =>
-              val information = FeedInfo(
+          syncRequest(url) match {
+            case Failure(exception) => requestor ! UrlNotFound(exception)
+            case Success(value) => 
+            value.onComplete {
+             case Success(feed) =>
+                val information = FeedInfo(
                   ((feed \ "channel") \ "title").headOption.map(_.text).get,
                   ((feed \ "channel") \ "description").headOption.map(_.text),
                   ((feed \ "channel") \ "item").map(item =>
@@ -137,22 +144,17 @@ object FeedAggregatorServer {
                       (item \ "pubDate").headOption.map(_.text).get
                     )
                   ).toList.filter(item => cmpDates(item.pubDate, since))
-              )
-
-          requestor ! information
-            case Failure(e) => 
-              println(s"\nNo se esta realizando el syncRequest correctamente ---> $e\n")
-              requestor ! e
+                )
+ 
+                requestor ! FeedDone(information)
+              case Failure(e) => 
+                requestor ! UrlNotFound(e)
+          }
           }
         
     }
   }
   
-  def myExceptionHandler = ExceptionHandler {
-    case e:java.net.UnknownHostException =>
-      complete((StatusCodes.NotFound, "404: Url doesnt exist")) 
-  }
-
   def main(args: Array[String]): Unit = {
     
     implicit val system = ActorSystem()
@@ -162,7 +164,6 @@ object FeedAggregatorServer {
     val coordinador = system.actorOf(Props[Coordinator], "Coordinador")
 
     val route =
-      Route.seal(
         concat (
           path("") {
             complete("Hello, World!")
@@ -174,10 +175,28 @@ object FeedAggregatorServer {
                 val feedInfo: Future[Any] = recibidor ? SyncRequest(url, since)
                 onComplete(feedInfo) {
                   case Success(feed) =>
-                    complete(feedInfo.mapTo[FeedInfo])
-                  case Failure(e) =>
-                    complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
-                }
+                    feed match {
+                      case UrlNotFound(e) => 
+                        println(s"El url not doundf e es :   $e")
+                        if(e.getMessage contains "java.net.UnknownHostException"){
+                          complete(StatusCodes.NotFound -> s"$url : Unkown name o service")
+                        }
+                        else if(e.getMessage contains "response status: 404"){
+                          complete(StatusCodes.NotFound -> s"Not Found: $url")
+                        }
+                        else if(e.getMessage contains "could not be parsed"){
+                          complete(StatusCodes.BadRequest -> s"The url has an incorrect format")
+                        }
+                        else{
+                          complete(StatusCodes.BadRequest -> "Dispatch error: Bad request")
+                        }
+                      case FeedDone(feed) => 
+                        complete(feed)
+                    }
+                  case Failure(e) => 
+                    complete(StatusCodes.BadRequest -> s"Failure: ${e.getMessage}")
+                  }
+                
               }
             }
           },
@@ -185,9 +204,9 @@ object FeedAggregatorServer {
             post{
               entity(as[Map[String,String]]) { url =>  //as[String] 
                 implicit val timeout = Timeout(5.second)
-                coordinador ! SyncRequest(url.get("url").get, None)
-                complete(s"Se agrego un nuevo url: " + 
-                         url.get("url").get + " a la lista de feeds") 
+                val urlFinal = url.get("url").get
+                coordinador ! SyncRequest(urlFinal, None)
+                complete(StatusCodes.OK -> s"The url: $urlFinal is added to the feed list") 
               }
             } 
           },
@@ -206,8 +225,7 @@ object FeedAggregatorServer {
             }
           }
         )
-      )
-
+      
     val bindingFuture = Http().bindAndHandle(route, "localhost", 8080)
     println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
