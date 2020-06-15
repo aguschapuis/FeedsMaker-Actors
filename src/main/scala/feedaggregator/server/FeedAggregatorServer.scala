@@ -13,7 +13,7 @@ import scala.concurrent.duration._
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 
-import akka.pattern.ask
+import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 
 
@@ -95,29 +95,17 @@ object FeedAggregatorServer {
            
        case DateTimeStr(since) =>
           println(context.children)
-          implicit val timeout = Timeout(10.second)
-          val list: Future[List[FeedInfo]] = Future( context.children.toList.map(actorref => {
-            var feedBack : Any = null
+          implicit val timeout = Timeout(30.second)
+          val list: List[Future[Any]] = context.children.toList.map(actorref => {
             implicit val timeout = Timeout(10.second)
-            val feedInfo = actorref ? AsyncRequest(
+            actorref ? AsyncRequest(
                             actorref.path.name.replaceAll("_", "/"), since)
-            feedInfo.onComplete {
-              case Success(feed) =>
-                // println("feed adentro del succes (datetiemstr): " + feed)
-                feedBack = feed
-                feedBack
-                // println("feedback pisado:  " + feedBack)
-                case Failure(e) =>
-                e
-              }
-              println("\n\n\n\n\nfeedback despues :   " + feedBack)
-            feedBack.asInstanceOf[FeedInfo]
-          }))
+          })
           println(list)
 
-          list.onComplete {
-            case Success(finallist) => sender() ! ListFeedItem(finallist)
-            case Failure(e) => sender() ! e
+          Future.sequence(list).onComplete {
+            case Success(result) => requestor ! result // result.pipeTo(requestor)
+            case Failure(error) => requestor ! error
           }
      
       }
