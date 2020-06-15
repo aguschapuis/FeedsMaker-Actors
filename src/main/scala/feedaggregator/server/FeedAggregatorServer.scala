@@ -90,7 +90,7 @@ object FeedAggregatorServer {
      def receive = {
        case SyncRequest(url, since) =>
           implicit val executionContext = context.system.dispatcher
-          val recibidor = context.actorOf(Props[Recibidor],
+          val requester = context.actorOf(Props[Requester],
                                           url.replaceAll("/", "_"))
            
        case DateTimeStr(since) =>
@@ -123,7 +123,7 @@ object FeedAggregatorServer {
       }
      }  
 
-  class Recibidor extends Actor{
+  class Requester extends Actor{
     import context.dispatcher
     def receive = {
       case SyncRequest(url, since) =>
@@ -160,7 +160,7 @@ object FeedAggregatorServer {
     implicit val system = ActorSystem()
     // needed for the future flatMap/onComplete in the end
     implicit val executionContext = system.dispatcher
-    val recibidor = system.actorOf(Props[Recibidor], "Recibidor")
+    val requester = system.actorOf(Props[Requester], "Requester")
     val coordinador = system.actorOf(Props[Coordinator], "Coordinador")
 
     val route =
@@ -172,7 +172,7 @@ object FeedAggregatorServer {
             get {
               parameter("url".as[String], "since".?) { (url, since) =>
                 implicit val timeout = Timeout(5.second)
-                val feedInfo: Future[Any] = recibidor ? SyncRequest(url, since)
+                val feedInfo: Future[Any] = requester ? SyncRequest(url, since)
                 onComplete(feedInfo) {
                   case Success(feed) =>
                     feed match {
