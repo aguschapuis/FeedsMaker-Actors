@@ -28,6 +28,11 @@ import java.text.SimpleDateFormat
 import java.lang.String
 import scala.annotation.compileTimeOnly
 
+import akka.http.scaladsl.model.HttpResponse
+import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.server._
+import Directives._
+import java.sql.Date
 
 object FeedAggregatorServer {
 
@@ -60,13 +65,9 @@ object FeedAggregatorServer {
   final case class InfoT(title: String, description: String, imagen: Int)
  
   case class SyncRequest(url: String, since: Option[String])
-
+  
   //Protocolo para Actor Coordinator.
-  case class DateTimeStr(since: String)
-
-  final case class Auxiliar(unic: Either[Throwable, xml.Elem]) 
-
-  // Needed for Unmarshalling
+  case class DateTimeStr(since: Option[String])
 
   //implicit val listFeedItem = jsonFormat1(ListFeedItem)
   implicit val feedItem = jsonFormat4(FeedItem)
@@ -90,22 +91,31 @@ object FeedAggregatorServer {
                                           url.replaceAll("/", "_"))
            
        case DateTimeStr(since) =>
-         implicit val timeout = Timeout(10.second)
-         val list = context.children.toList.map(actorref => {
+          println(context.children)
+          implicit val timeout = Timeout(10.second)
+          val list: Future[List[FeedInfo]] = Future( context.children.toList.map(actorref => {
             var feedBack : Any = null
             implicit val timeout = Timeout(10.second)
             val feedInfo = actorref ? SyncRequest(
-                           actorref.path.name.replaceAll("_", "/"), Some(since))
-
+                            actorref.path.name.replaceAll("_", "/"), since)
             feedInfo.onComplete {
               case Success(feed) =>
+                // println("feed adentro del succes (datetiemstr): " + feed)
                 feedBack = feed
-              case Failure(e) =>
+                feedBack
+                // println("feedback pisado:  " + feedBack)
+                case Failure(e) =>
                 e
-            }
-            feedBack.asInstanceOf[FeedInfo] 
-         })
-         sender() ! ListFeedItem(list)
+              }
+              println("\n\n\n\n\nfeedback despues :   " + feedBack)
+            feedBack.asInstanceOf[FeedInfo]
+          }))
+          println(list)
+
+          list.onComplete {
+            case Success(finallist) => sender() ! ListFeedItem(finallist)
+            case Failure(e) => sender() ! e
+          }
      }
   }
 
@@ -132,11 +142,16 @@ object FeedAggregatorServer {
           requestor ! information
             case Failure(e) => 
               println(s"\nNo se esta realizando el syncRequest correctamente ---> $e\n")
+              requestor ! e
           }
+        
     }
   }
-
-
+  
+  def myExceptionHandler = ExceptionHandler {
+    case e:java.net.UnknownHostException =>
+      complete((StatusCodes.NotFound, "404: Url doesnt exist")) 
+  }
 
   def main(args: Array[String]): Unit = {
     
@@ -147,49 +162,50 @@ object FeedAggregatorServer {
     val coordinador = system.actorOf(Props[Coordinator], "Coordinador")
 
     val route =
-      concat (
-        path("") {
-          complete("Hello, World!")
-        },
-        path("feed") {
-          get {
-            parameter("url".as[String], "since".?) { (url, since) =>
-              implicit val timeout = Timeout(5.second)
-              val feedInfo: Future[Any] = recibidor ? SyncRequest(url, since)
-              onComplete(feedInfo) {
-                case Success(feed) =>
-                  complete(feedInfo.mapTo[FeedInfo])
-                case Failure(e) =>
-                  complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
+      Route.seal(
+        concat (
+          path("") {
+            complete("Hello, World!")
+          },
+          path("feed") {
+            get {
+              parameter("url".as[String], "since".?) { (url, since) =>
+                implicit val timeout = Timeout(5.second)
+                val feedInfo: Future[Any] = recibidor ? SyncRequest(url, since)
+                onComplete(feedInfo) {
+                  case Success(feed) =>
+                    complete(feedInfo.mapTo[FeedInfo])
+                  case Failure(e) =>
+                    complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
+                }
+              }
+            }
+          },
+          path("subscribe"){
+            post{
+              entity(as[Map[String,String]]) { url =>  //as[String] 
+                implicit val timeout = Timeout(5.second)
+                coordinador ! SyncRequest(url.get("url").get, None)
+                complete(s"Se agrego un nuevo url: " + 
+                         url.get("url").get + " a la lista de feeds") 
+              }
+            } 
+          },
+          path("feeds"){
+            get{
+              parameter("since".?) {since =>
+                  implicit val timeout = Timeout(10.second)
+                  val listFeedItem: Future[Any] = coordinador ? DateTimeStr(since)
+                  onComplete(listFeedItem) {
+                    case Success(feed) =>
+                      complete(listFeedItem.mapTo[ListFeedItem])
+                    case Failure(e) =>
+                      complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
+                  }
               }
             }
           }
-        },
-        path("subscribe"){
-          post{
-            entity(as[Map[String,String]]) { url =>  //as[String] 
-              implicit val timeout = Timeout(5.second)
-              coordinador ! SyncRequest(url.get("url").get, None)
-              complete(s"Se agrego un nuevo url: " + 
-                       url.get("url").get + " a la lista de feeds") 
-            }
-          } 
-        },
-        path("feeds"){
-          get{
-            parameter("since".?) { since =>
-              implicit val timeout = Timeout(10.second)
-              val listFeedItem: Future[Any] = coordinador ? DateTimeStr(
-                                                                      since.get)
-              onComplete(listFeedItem) {
-                case Success(feed) =>
-                  complete(listFeedItem.mapTo[ListFeedItem])
-                case Failure(e) =>
-                  complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
-              }
-            }
-          }
-        }
+        )
       )
 
     val bindingFuture = Http().bindAndHandle(route, "localhost", 8080)
