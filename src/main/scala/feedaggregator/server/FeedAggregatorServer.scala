@@ -35,6 +35,8 @@ import Directives._
 import java.sql.Date
 import java.util.concurrent.CompletionException
 
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
+
 
 object FeedAggregatorServer {
 
@@ -63,20 +65,21 @@ object FeedAggregatorServer {
     }
   }
 
-
-  final case class InfoT(title: String, description: String, imagen: Int)
- 
+  //Protocolo para actor Requester
   case class AsyncRequest(url: String, since: Option[String])
   
+  //Respuestas del actor Requester
   case class UrlNotFound(e:Throwable)
-  case class FeedDone(e:FeedInfo)
+  case class FeedDone(feed:FeedInfo)
+
   //Protocolo para Actor Coordinator.
   case class DateTimeStr(since: Option[String])
 
-  //implicit val listFeedItem = jsonFormat1(ListFeedItem)
   implicit val feedItem = jsonFormat4(FeedItem)
   implicit val feedInfo = jsonFormat3(FeedInfo)
   implicit val listfeedItem = jsonFormat1(ListFeedItem)
+  implicit val feeddone = jsonFormat1(FeedDone)
+
   // TODO: This function needs to be moved to the right place
   def asyncRequest(path: String): Try[Future[xml.Elem]] = {
     import dispatch._, Defaults._
@@ -199,7 +202,8 @@ object FeedAggregatorServer {
                   val listFeedItem: Future[Any] = coordinador ? DateTimeStr(since)
                   onComplete(listFeedItem) {
                     case Success(feed) =>
-                      complete(listFeedItem.mapTo[ListFeedItem])
+                      println("EL feed es ==> " + feed.asInstanceOf[List[FeedDone]])
+                      complete(feed.asInstanceOf[List[FeedDone]])
                     case Failure(e) =>
                       complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
                   }
