@@ -97,7 +97,7 @@ object FeedAggregatorServer {
                                           url.replaceAll("/", "_"))
            
        case DateTimeStr(since) =>
-          println(context.children)
+        println("El since es ==> "  + since)
           implicit val timeout = Timeout(30.second)
           val list: List[Future[Any]] = context.children.toList.map(actorref => {
             implicit val timeout = Timeout(10.second)
@@ -199,10 +199,10 @@ object FeedAggregatorServer {
             get{
               parameter("since".?) {since =>
                   implicit val timeout = Timeout(10.second)
+                   println("El since de feeds es ==> "  + since)
                   val listFeedItem: Future[Any] = coordinador ? DateTimeStr(since)
                   onComplete(listFeedItem) {
                     case Success(feed) =>
-                      println("EL feed es ==> " + feed.asInstanceOf[List[FeedDone]])
                       complete(feed.asInstanceOf[List[FeedDone]])
                     case Failure(e) =>
                       complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
