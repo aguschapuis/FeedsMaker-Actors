@@ -101,13 +101,7 @@ object FeedAggregatorServer {
             actorref ? AsyncRequest(
                             actorref.path.name.replaceAll("_", "/"), since)
           })
-          println(list)
-
-          Future.sequence(list).onComplete {
-            case Success(result) => requestor ! result // result.pipeTo(requestor)
-            case Failure(error) => requestor ! error
-          }
-     
+          Future.sequence(list) pipeTo sender()
       }
      }  
 
