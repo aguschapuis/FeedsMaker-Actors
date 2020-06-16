@@ -25,3 +25,8 @@ Decidimos utilizar este esquema puesto que con el actor coordinador creamos un h
 Un Future[A] es un tipo contenedor que representa un cálculo que finalmente dará como resultado un valor de tipo A, cuando se completa el futuro puede que sea Success (es decir, se pudo completar el cálculo) o Failure (se agotó el tiempo de espera u ocurrió una excepción).
 Utilizamos Futures para evitar que el sistema se quede bloqueado esperando terminar alguna tarea o cálculo, por ejemplo enviando un mensaje a un actor con el operador ask ? para luego obtener su eventual respuesta, de esta forma la ejecución de nuestro programa ya no es síncrona.
 Si este sistema estuviese implementado de manera síncrona cada request que se hace bloquearía el sistema en general hasta que haya terminado sin poder atender a las otras que van llegando. Es decir, estaríamos desperdiciando recursos al bloquearlos esperando el resultado de una request.
+
+#¿Qué les asegura el sistema de pasaje de mensajes y cómo se diferencia con un semáforo/mutex?
+ El sistema de mensajeria nos asegura la comunicacion entre los actores, lo que es necesario
+ para realizar tareas en conjunto donde un actor envie datos o pedidos a un actor y espera la devolucion de 
+ este actor para continuar con el procesamiento de su propia tarea definida por su comportamiento.
