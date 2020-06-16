@@ -30,3 +30,7 @@ Si este sistema estuviese implementado de manera síncrona cada request que se h
  El sistema de mensajeria nos asegura la comunicacion entre los actores, lo que es necesario
  para realizar tareas en conjunto donde un actor envie datos o pedidos a un actor y espera la devolucion de 
  este actor para continuar con el procesamiento de su propia tarea definida por su comportamiento.
+ Una de las diferencias con el mutex/semaforo es que no se bloquea a los usuario en la espera y no se compite
+ por un recurso, tambien se tiene una estructura de comunicacion mas compleja, dado que se necestia un sistema
+ de mails para comunicarse, protocolos de comunicacion, buzones de mail, colas de mensajes y otras estructuras
+ necesarias para la comunicacion.  
