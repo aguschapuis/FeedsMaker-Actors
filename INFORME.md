@@ -8,6 +8,14 @@ Le pasamos los mismos un actor Requester con el msg SynqRequest el cual nos devu
 
 Este actor puede recibir un solo tipo de mensaje el cual es SynqRequest que trae en sus parametro un url y un since(opcional), este se encarga de contruir la informacion del feed para luego ser devuelta a quien lo solicito (requestor)
 
+# Actor Coordinator
+Es el actor encargado de tomar los urls mandados en un SUBSCRIBE y crear un actor hijo para cada url, estos 
+actores son del tipo Requestor, tambien manejan los pedidos enviados por el endpoint feeds para los cuales
+recibe por medio de un mensaje de protocolo el parametro since y se los envia a cada hijo existente (cada uno
+representa una url) para que estos realicen la coneccion con el servidor de la url y retornen los items de cada
+pagina segun el url del actor. Una vez recibido de cada actor hijo los items, los procesa creando una lista que
+sera enviada al usuario que mando ejecuto el endpoint.
+
 # Jerarquía
 
 Ni bien creamos nuestro ActorSystem en el main akka crea tres actores en el sistema (root guardian, user guardian y system guardian) de los cuáles en este laboratorio trabajaremos con el actor user guardian para crear dos nuevas instancias a partir de éste: el actor requester y el actor coordinador usando system.actorOf().
@@ -33,4 +41,6 @@ Si este sistema estuviese implementado de manera síncrona cada request que se h
  Una de las diferencias con el mutex/semaforo es que no se bloquea a los usuario en la espera y no se compite
  por un recurso, tambien se tiene una estructura de comunicacion mas compleja, dado que se necestia un sistema
  de mails para comunicarse, protocolos de comunicacion, buzones de mail, colas de mensajes y otras estructuras
- necesarias para la comunicacion.  
+ necesarias para la comunicacion.
+
+  
