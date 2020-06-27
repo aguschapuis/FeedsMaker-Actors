@@ -38,6 +38,7 @@ import java.util.concurrent.CompletionException
 import scala.collection.mutable
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
+import java.io.ObjectInputFilter.Status
 
 
 object FeedAggregatorServer {
@@ -92,38 +93,47 @@ object FeedAggregatorServer {
     Try(dispatch.Http.default(dispatch.url(path) OK dispatch.as.xml.Elem))
   }
 
+  /*Actor coordinador el cual puede recivir dos clases de mensajes:
+  - CreateActor: Se encarga de crear a todos los actores Requesters 
+  que van a construir los feeds
+  - DateTimeStr: Se llama a cada actor ya creado previamente para
+  que estos contruyan los feeds. Estos se van poniendo en una lista
+  (feedList) la cual es devuelta a quien la pidio en el route */
 
   class Coordinator extends Actor{
-     import context.dispatcher
-     def receive = {
-       case CreateActor(url) =>
-          val requestor = sender()
-          asyncRequest(url) match {
-            case Failure(exception) => requestor ! UrlNotFound(exception)
-            case Success(rss) => 
-              rss.onComplete {
-                case Success(feed) =>
-                  val requester = context.actorOf(Props[Requester],
-                                              url.replaceAll("/", "_"))
-                  requestor ! UrlOk(url)
-                case Failure(e) => 
-                  requestor ! UrlNotFound(e)
-            }
-          }
+    import context.dispatcher
+    def receive = {
+      case CreateActor(url) =>
+         val requestor = sender()
+         asyncRequest(url) match {
+           case Failure(exception) => requestor ! UrlNotFound(exception)
+           case Success(rss) => 
+             rss.onComplete {
+               case Success(feed) =>
+                 val requester = context.actorOf(Props[Requester],
+                                             url.replaceAll("/", "_"))
+                 requestor ! UrlOk(url)
+               case Failure(e) => 
+                 requestor ! UrlNotFound(e)
+           }
+         }
           
-           
-       case DateTimeStr(since) =>
-          val requestor = sender()
-          implicit val timeout = Timeout(30.second)
-          val list: List[Future[Any]] = context.children.toList.map(actorref => {
-            implicit val timeout = Timeout(10.second)
-            actorref ? AsyncRequest(
-                            actorref.path.name.replaceAll("_", "/"), since)
-          })
-          Future.sequence(list) pipeTo sender()
-      }
-     }  
+      case DateTimeStr(since) =>
+         val requestor = sender()
+         implicit val timeout = Timeout(30.second)
+         val feedlist: List[Future[Any]] = context.children.toList.map(actorref => {
+           implicit val timeout = Timeout(10.second)
+           actorref ? AsyncRequest(
+                           actorref.path.name.replaceAll("_", "/"), since)
+         })
+         Future.sequence(feedlist) pipeTo sender()
+     }
+    }  
 
+  /*Actor requester que puede recibir una sola clase de mensaje:
+  AsyncRequest: Se encarga de tomar el rss de el url pasado por parametro
+  y con este construir el feed que tiene toda la informacion*/
+  
   class Requester extends Actor{
     import context.dispatcher
     def receive = {
@@ -179,7 +189,6 @@ object FeedAggregatorServer {
                   case Success(feed) =>
                     feed match {
                       case UrlNotFound(e) => 
-                        println(s"El url not doundf e es :   $e")
                         if(e.getMessage contains "java.net.UnknownHostException"){
                           complete(StatusCodes.NotFound -> s"$url : Unkown name o service")
                         }
@@ -216,7 +225,6 @@ object FeedAggregatorServer {
                         url_counter += 1
                         complete(StatusCodes.OK -> s"The url: $url is added to the feed list")
                       case UrlNotFound(e) => 
-                        println(s"El url not doundf e es :   $e")
                         if(e.getMessage contains "java.net.UnknownHostException"){
                           complete(StatusCodes.NotFound -> s"$urlFinal : Unkown name o service")
                         }
@@ -239,14 +247,17 @@ object FeedAggregatorServer {
           path("feeds"){
             get{
               parameter("since".?) {since =>
-                  implicit val timeout = Timeout(10.second)
-                  val listFeedItem: Future[Any] = coordinador ? DateTimeStr(since)
-                  onComplete(listFeedItem) {
-                    case Success(feed) =>
-                      complete(feed.asInstanceOf[List[FeedDone]])
-                    case Failure(e) =>
-                      complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
-                  }
+                implicit val timeout = Timeout(10.second)
+                val listFeedItem: Future[Any] = coordinador ? DateTimeStr(since)
+                onComplete(listFeedItem) {
+                  case Success(feed) =>
+                    if(url_counter == 0) {
+                      complete(StatusCodes.NotFound -> "There are no subcribed Urls")
+                    }
+                    else complete(feed.asInstanceOf[List[FeedDone]])
+                  case Failure(e) =>
+                    complete(StatusCodes.BadRequest -> s"Bad Request: ${e.getMessage}")
+                }
               }
             }
           }
