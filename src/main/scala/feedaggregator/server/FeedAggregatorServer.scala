@@ -88,24 +88,27 @@ object FeedAggregatorServer {
 
 
   class Coordinator extends Actor{
-     import context.dispatcher
-     val requestor = sender()
-     def receive = {
-       case AsyncRequest(url, since) =>
-          implicit val executionContext = context.system.dispatcher
-          val requester = context.actorOf(Props[Requester],
-                                          url.replaceAll("/", "_"))
-           
-       case DateTimeStr(since) =>
-          implicit val timeout = Timeout(30.second)
-          val list: List[Future[Any]] = context.children.toList.map(actorref => {
-            implicit val timeout = Timeout(10.second)
-            actorref ? AsyncRequest(
-                            actorref.path.name.replaceAll("_", "/"), since)
-          })
-          Future.sequence(list) pipeTo sender()
-      }
-     }  
+    import scala.collection.mutable
+    import context.dispatcher
+    val url_list = mutable.ListBuffer[String]()
+    val requestor = sender()
+    def receive = {
+      case AsyncRequest(url, since) =>
+         implicit val executionContext = context.system.dispatcher
+         url_list += url
+         val requester = context.actorOf(Props[Requester],
+                                         url.replaceAll("/", "_"))
+          
+      case DateTimeStr(since) =>
+         implicit val timeout = Timeout(30.second)
+         val list: List[Future[Any]] = context.children.toList.map(actorref => {
+           implicit val timeout = Timeout(10.second)
+           actorref ? AsyncRequest(
+                           actorref.path.name.replaceAll("_", "/"), since)
+         })
+         Future.sequence(list) pipeTo sender()
+     }
+    }  
 
   class Requester extends Actor{
     import context.dispatcher
