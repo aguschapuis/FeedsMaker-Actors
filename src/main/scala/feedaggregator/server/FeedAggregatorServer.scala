@@ -1,4 +1,8 @@
-package feedaggregator.server
+package feedaggregator.server\
+
+import actors._
+import actors.Coordinator._
+import actors.Requester._
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -54,117 +58,10 @@ object FeedAggregatorServer {
                             items: List[FeedItem]
                             )
 
-  
-  def cmpDates(pubDate: String, since: Option[String]): Boolean = {
-    since match {
-      case None => true
-      case Some(value) => {
-        val formatSince: String = "yyyy-MM-dd'T'HH:mm:ss"
-        val formatPubDate: String = "dd MMM yyyy HH:mm:ss z"
-        val sinceFormatted = new SimpleDateFormat(formatSince).parse(value)
-        val pubDateFormatted = new SimpleDateFormat(formatPubDate).parse(pubDate.split(", ")(1))
-        pubDateFormatted.after(sinceFormatted) // true sii pubDateFormatted > sinceFormatted
-      }
-    }
-  }
-
-  //Protocolo para actor Requester
-  case class AsyncRequest(url: String, since: Option[String])
-  
-  //Respuestas del actor Requester
-  case class UrlNotFound(e:Throwable)
-  case class FeedDone(feed:FeedInfo)
-  
-  //Protocolo para Actor Coordinator.
-  case class DateTimeStr(since: Option[String])
-  case class CreateActor(url: String)
-  
-  //Respuestas del actor Cordinator
-  case class  UrlOk(url: String)
-
   implicit val feedItem = jsonFormat4(FeedItem)
   implicit val feedInfo = jsonFormat3(FeedInfo)
   implicit val listfeedItem = jsonFormat1(ListFeedItem)
   implicit val feeddone = jsonFormat1(FeedDone)
-
-  // TODO: This function needs to be moved to the right place
-  def asyncRequest(path: String): Try[Future[xml.Elem]] = {
-    import dispatch._, Defaults._
-    Try(dispatch.Http.default(dispatch.url(path) OK dispatch.as.xml.Elem))
-  }
-
-  /*Actor coordinador el cual puede recivir dos clases de mensajes:
-  - CreateActor: Se encarga de crear a todos los actores Requesters 
-  que van a construir los feeds
-  - DateTimeStr: Se llama a cada actor ya creado previamente para
-  que estos contruyan los feeds. Estos se van poniendo en una lista
-  (feedList) la cual es devuelta a quien la pidio en el route */
-
-  class Coordinator extends Actor{
-    import context.dispatcher
-    def receive = {
-      case CreateActor(url) =>
-         val requestor = sender()
-         asyncRequest(url) match {
-           case Failure(exception) => requestor ! UrlNotFound(exception)
-           case Success(rss) => 
-             rss.onComplete {
-               case Success(feed) =>
-                 val requester = context.actorOf(Props[Requester],
-                                             url.replaceAll("/", "_"))
-                 requestor ! UrlOk(url)
-               case Failure(e) => 
-                 requestor ! UrlNotFound(e)
-           }
-         }
-          
-      case DateTimeStr(since) =>
-         val requestor = sender()
-         implicit val timeout = Timeout(30.second)
-         val feedlist: List[Future[Any]] = context.children.toList.map(actorref => {
-           implicit val timeout = Timeout(10.second)
-           actorref ? AsyncRequest(
-                           actorref.path.name.replaceAll("_", "/"), since)
-         })
-         Future.sequence(feedlist) pipeTo sender()
-     }
-    }  
-
-  /*Actor requester que puede recibir una sola clase de mensaje:
-  AsyncRequest: Se encarga de tomar el rss de el url pasado por parametro
-  y con este construir el feed que tiene toda la informacion*/
-  
-  class Requester extends Actor{
-    import context.dispatcher
-    def receive = {
-      case AsyncRequest(url, since) =>
-          val requestor = sender()
-          asyncRequest(url) match {
-            case Failure(exception) => requestor ! UrlNotFound(exception)
-            case Success(value) => 
-            value.onComplete {
-             case Success(feed) =>
-                val information = FeedInfo(
-                  ((feed \ "channel") \ "title").headOption.map(_.text).get,
-                  ((feed \ "channel") \ "description").headOption.map(_.text),
-                  ((feed \ "channel") \ "item").map(item =>
-                    FeedItem(
-                      (item \ "title").headOption.map(_.text).get,
-                      (item \ "link").headOption.map(_.text).get,
-                      (item \ "description").headOption.map(_.text),
-                      (item \ "pubDate").headOption.map(_.text).get
-                    )
-                  ).toList.filter(item => cmpDates(item.pubDate, since))
-                )
- 
-                requestor ! FeedDone(information)
-              case Failure(e) => 
-                requestor ! UrlNotFound(e)
-          }
-          }
-        
-    }
-  }
   
   def main(args: Array[String]): Unit = {
     
