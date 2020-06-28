@@ -39,23 +39,42 @@ import scala.collection.mutable.ListBuffer
 import feedaggregator.server.FeedAggregatorServer._
 
 
+ final case class ListFeedItem(list: List[FeedInfo])
+ final case class FeedItem(title: String,
+                            link: String,
+                            description: Option[String],
+                            pubDate: String
+                            )
+ final case class FeedInfo(title: String,
+                            description: Option[String],
+                            items: List[FeedItem]
+                            )
 
-object Coordinator {
+
+
   //Protocolo para Actor Coordinator.
   case class DateTimeStr(since: Option[String])
   case class CreateActor(url: String)
 
   //Respuestas del actor Cordinator
   case class  UrlOk(url: String)
+
+
+
+object Coordinator {
+
 }
 
-object Requester {
+
   //Protocolo para actor Requester
   case class AsyncRequest(url: String, since: Option[String])
   
   //Respuestas del actor Requester
   case class UrlNotFound(e:Throwable)
   case class FeedDone(feed:FeedInfo)
+
+object Requester {
+
 }
 
 
@@ -95,6 +114,11 @@ class Coordinator extends Actor{
                          actorref.path.name.replaceAll("_", "/"), since)
       })
       Future.sequence(feedlist) pipeTo sender()
+  }
+  
+  def asyncRequest(path: String): Try[Future[xml.Elem]] = {
+  import dispatch._, Defaults._
+  Try(dispatch.Http.default(dispatch.url(path) OK dispatch.as.xml.Elem))
   }
 }
 

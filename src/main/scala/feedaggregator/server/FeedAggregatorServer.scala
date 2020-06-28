@@ -1,8 +1,8 @@
-package feedaggregator.server\
+package feedaggregator.server
 
 import actors._
-import actors.Coordinator._
-import actors.Requester._
+//import actors.Coordinator._
+//import actors.Requester._
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -47,17 +47,7 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 
 object FeedAggregatorServer {
 
-  final case class ListFeedItem(list: List[FeedInfo])
-  final case class FeedItem(title: String,
-                            link: String,
-                            description: Option[String],
-                            pubDate: String
-                            )
-  final case class FeedInfo(title: String,
-                            description: Option[String],
-                            items: List[FeedItem]
-                            )
-
+ 
   implicit val feedItem = jsonFormat4(FeedItem)
   implicit val feedInfo = jsonFormat3(FeedInfo)
   implicit val listfeedItem = jsonFormat1(ListFeedItem)
@@ -102,7 +92,7 @@ object FeedAggregatorServer {
                           complete(StatusCodes.BadRequest -> "Dispatch error: Bad request")
                         }
                       case FeedDone(feed) => 
-                        complete(feed)
+                        complete(feed.asInstanceOf[List[FeedDone]])
                     }
                   case Failure(e) => 
                     complete(StatusCodes.BadRequest -> s"Failure: ${e.getMessage}")
