@@ -38,7 +38,7 @@ import java.util.concurrent.CompletionException
 import scala.collection.mutable
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
-import java.io.ObjectInputFilter.Status
+//import java.io.ObjectInputFilter.Status
 
 
 object FeedAggregatorServer {
@@ -63,7 +63,7 @@ object FeedAggregatorServer {
         val formatPubDate: String = "dd MMM yyyy HH:mm:ss z"
         val sinceFormatted = new SimpleDateFormat(formatSince).parse(value)
         val pubDateFormatted = new SimpleDateFormat(formatPubDate).parse(pubDate.split(", ")(1))
-        pubDateFormatted.before(sinceFormatted) // true sii pubDateFormatted < sinceFormatted
+        pubDateFormatted.after(sinceFormatted) // true sii pubDateFormatted > sinceFormatted
       }
     }
   }
@@ -183,7 +183,7 @@ object FeedAggregatorServer {
           path("feed") {
             get {
               parameter("url".as[String], "since".?) { (url, since) =>
-                implicit val timeout = Timeout(5.second)
+                implicit val timeout = Timeout(10.second)
                 val feedInfo: Future[Any] = requester ? AsyncRequest(url, since)
                 onComplete(feedInfo) {
                   case Success(feed) =>
@@ -197,6 +197,9 @@ object FeedAggregatorServer {
                         }
                         else if(e.getMessage contains "could not be parsed"){
                           complete(StatusCodes.BadRequest -> s"The url has an incorrect format")
+                        }
+                        else if(e.getMessage contains "java.text.ParseException"){
+                          complete(StatusCodes.BadRequest -> s"Invalid date format")
                         }
                         else{
                           complete(StatusCodes.BadRequest -> "Dispatch error: Bad request")
