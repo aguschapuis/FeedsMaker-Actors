@@ -1,8 +1,8 @@
 package feedaggregator.server
 
 import actors._
-//import actors.Coordinator._
-//import actors.Requester._
+import actors.Coordinator._
+import actors.Requester._
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
