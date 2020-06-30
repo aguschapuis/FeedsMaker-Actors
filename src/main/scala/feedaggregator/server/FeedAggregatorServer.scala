@@ -48,8 +48,8 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 object FeedAggregatorServer {
 
  
-  implicit val feedItem = jsonFormat4(FeedItem)
-  implicit val feedInfo = jsonFormat3(FeedInfo)
+  implicit val feeditem = jsonFormat4(FeedItem)
+  implicit val feedinfo = jsonFormat3(FeedInfo)
   implicit val listfeedItem = jsonFormat1(ListFeedItem)
   implicit val feeddone = jsonFormat1(FeedDone)
   
@@ -92,7 +92,7 @@ object FeedAggregatorServer {
                           complete(StatusCodes.BadRequest -> "Dispatch error: Bad request")
                         }
                       case FeedDone(feed) => 
-                        complete(feed.asInstanceOf[List[FeedDone]])
+                        complete(feed.asInstanceOf[FeedInfo])
                     }
                   case Failure(e) => 
                     complete(StatusCodes.BadRequest -> s"Failure: ${e.getMessage}")

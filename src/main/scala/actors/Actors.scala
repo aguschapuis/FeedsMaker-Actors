@@ -155,21 +155,20 @@ class Requester extends Actor{
       asyncRequest(url) match {
         case Failure(exception) => requestor ! UrlNotFound(exception)
         case Success(value) => 
-        value.onComplete {
-         case Success(feed) =>
-            val information = FeedInfo(
-              ((feed \ "channel") \ "title").headOption.map(_.text).get,
-              ((feed \ "channel") \ "description").headOption.map(_.text),
-              ((feed \ "channel") \ "item").map(item =>
-                FeedItem(
-                  (item \ "title").headOption.map(_.text).get,
-                  (item \ "link").headOption.map(_.text).get,
-                  (item \ "description").headOption.map(_.text),
-                  (item \ "pubDate").headOption.map(_.text).get
-                )
-              ).toList.filter(item => cmpDates(item.pubDate, since))
-            )
-
+          value.onComplete {
+            case Success(feed) =>
+              val information = FeedInfo(
+                ((feed \ "channel") \ "title").headOption.map(_.text).get,
+                ((feed \ "channel") \ "description").headOption.map(_.text),
+                ((feed \ "channel") \ "item").map(item =>
+                  FeedItem(
+                    (item \ "title").headOption.map(_.text).get,
+                    (item \ "link").headOption.map(_.text).get,
+                    (item \ "description").headOption.map(_.text),
+                    (item \ "pubDate").headOption.map(_.text).get
+                  )
+                ).toList.filter(item => cmpDates(item.pubDate, since))
+              )
             requestor ! FeedDone(information)
           case Failure(e) => 
             requestor ! UrlNotFound(e)
