@@ -87,7 +87,9 @@ object Requester {
 
 class Coordinator extends Actor{
   import Coordinator._
+  import scala.collection.mutable
   import context.dispatcher
+  val urls_list = mutable.ListBuffer[ActorRef]()
 
   def receive = {
     case CreateActor(url) =>
@@ -99,6 +101,7 @@ class Coordinator extends Actor{
             case Success(feed) =>
               val requester = context.actorOf(Props[Requester],
                                            url.replaceAll("/", "_"))
+              urls_list += requester
               requestor ! UrlOk(url)
             case Failure(e) => 
               requestor ! UrlNotFound(e)
@@ -108,7 +111,7 @@ class Coordinator extends Actor{
     case DateTimeStr(since) =>
       val requestor = sender()
       implicit val timeout = Timeout(30.second)
-      val feedlist: List[Future[Any]] = context.children.toList.map(actorref => {
+      val feedlist: List[Future[Any]] = urls_list.toList.map(actorref => {
         implicit val timeout = Timeout(10.second)
         actorref ? AsyncRequest(
                          actorref.path.name.replaceAll("_", "/"), since)

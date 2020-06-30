@@ -39,7 +39,7 @@ import Directives._
 import java.sql.Date
 import java.util.concurrent.CompletionException
 
-import scala.collection.mutable
+// import scala.collection.mutable
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 //import java.io.ObjectInputFilter.Status
@@ -61,7 +61,7 @@ object FeedAggregatorServer {
     val requester = system.actorOf(Props[Requester], "Requester")
     val coordinador = system.actorOf(Props[Coordinator], "Coordinador")
     var url_counter = 0
-    val urls_list = mutable.ListBuffer[(Int,String)]()
+    // val urls_list = mutable.ListBuffer[(Int,String)]()
     val route =
         concat (
           path("") {
@@ -77,25 +77,31 @@ object FeedAggregatorServer {
                     feed match {
                       case UrlNotFound(e) => 
                         if(e.getMessage contains "java.net.UnknownHostException"){
-                          complete(StatusCodes.NotFound -> s"$url : Unkown name o service")
+                          complete(StatusCodes.NotFound -> 
+                                    s"$url : Unkown name o service")
                         }
                         else if(e.getMessage contains "response status: 404"){
-                          complete(StatusCodes.NotFound -> s"Not Found: $url")
+                          complete(StatusCodes.NotFound -> 
+                                    s"Not Found: $url")
                         }
                         else if(e.getMessage contains "could not be parsed"){
-                          complete(StatusCodes.BadRequest -> s"The url has an incorrect format")
+                          complete(StatusCodes.BadRequest -> 
+                                    s"The url has an incorrect format")
                         }
                         else if(e.getMessage contains "java.text.ParseException"){
-                          complete(StatusCodes.BadRequest -> s"Invalid date format")
+                          complete(StatusCodes.BadRequest -> 
+                                    s"Invalid date format")
                         }
                         else{
-                          complete(StatusCodes.BadRequest -> "Dispatch error: Bad request")
+                          complete(StatusCodes.BadRequest -> 
+                                    "Dispatch error: Bad request")
                         }
                       case FeedDone(feed) => 
                         complete(feed.asInstanceOf[FeedInfo])
                     }
                   case Failure(e) => 
-                    complete(StatusCodes.BadRequest -> s"Failure: ${e.getMessage}")
+                    complete(StatusCodes.BadRequest -> 
+                                  s"Failure: ${e.getMessage}")
                   }
                 
               }
@@ -111,25 +117,30 @@ object FeedAggregatorServer {
                   case Success(set) =>
                     set match {
                       case UrlOk(url) =>  
-                        urls_list += (url_counter -> url)
+                        // urls_list += (url_counter -> url)
                         url_counter += 1
                         complete(StatusCodes.OK -> s"The url: $url is added to the feed list")
                       case UrlNotFound(e) => 
                         if(e.getMessage contains "java.net.UnknownHostException"){
-                          complete(StatusCodes.NotFound -> s"$urlFinal : Unkown name o service")
+                          complete(StatusCodes.NotFound -> 
+                                    s"$urlFinal : Unkown name o service")
                         }
                         else if(e.getMessage contains "response status: 404"){
-                          complete(StatusCodes.NotFound -> s"Not Found: $urlFinal")
+                          complete(StatusCodes.NotFound -> 
+                                    s"Not Found: $urlFinal")
                         }
                         else if(e.getMessage contains "could not be parsed"){
-                          complete(StatusCodes.BadRequest -> s"The url has an incorrect format")
+                          complete(StatusCodes.BadRequest -> 
+                                    s"The url has an incorrect format")
                         }
                         else{
-                          complete(StatusCodes.BadRequest -> "Dispatch error: Bad request")
+                          complete(StatusCodes.BadRequest -> 
+                                    "Dispatch error: Bad request")
                         }
                     }
                   case Failure(e) => 
-                    complete(StatusCodes.BadRequest -> s"Failure: ${e.getMessage}")
+                    complete(StatusCodes.BadRequest -> 
+                                  s"Failure: ${e.getMessage}")
                 }  
               }
             }
