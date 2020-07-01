@@ -63,4 +63,13 @@ envía un mensaje solicitando el feed de la url que representa cada uno, estos r
 el actor usuario los almacena y luego se los envía al actor Coordinator el cual retorna la respuesta
 al servidor.
 
-  
+# Punto estrella 2:
+En este caso se creara un actor nuevo Processor, este extiende directamente de la clase Actor, en esta clase se definirán el o los métodos usados para procesar los elementos que concuerdan en
+ambos feeds, tanto atom como rss. Posteriormente se definirá dos clases nuevas, una llamada
+ProcessorAtom y ProcessorRss que heredaran de la clase Processor, estas clases definirán
+nuevos métodos específicos para el parseo de los feeds. Estos actores estarán vinculados a los 
+actores Requestor y dependerá del tipo de Url que representa cada uno, es decir siguiendo con
+la estructura anterior, el actor usuario a medida que va agregando url de las feeds respectivas
+representados por los Requestor, va indicando si es del tipo atom o rss. Al ejecutar el endpoint
+GET /feeds, el Requestor, crea el actor ProcessorAtom o ProcessorRss para parsear el feed que 
+representa.
