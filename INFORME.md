@@ -43,4 +43,33 @@ Si este sistema estuviese implementado de manera síncrona cada request que se h
  de mails para comunicarse, protocolos de comunicacion, buzones de mail, colas de mensajes y otras estructuras
  necesarias para la comunicacion.
 
-  
+# Punto estrella 1:
+Para lograr el punto estrella cuatro se necesitará crear un actor nuevo para cada usuario
+es decir para el endpoint  POST /user cada llamada a este api se creara un actor cuyo nombre
+del actor será el del usuario (para ello tenemos parámetro ‘username’) y este estará asociado al actor
+Coordinator ya sea como hijo, donde este lo creara a partir de su contexto o por medio del almacenamiento
+del actor usuario en una estructura de datos, ya sea un diccionario indexado por su nombre y cuyo valor
+es elactorref del actor, o por una lista. En cuanto a la implementación para el endpoint POST /suscribe,
+el actor Coordinator recibirá el pedido de suscripción y llamara al usuario identificado por el parámetro
+username, le enviara por medio de un mensaje el url a suscribir, este lo recibirá y suponiendo que no lo
+tiene creara un actor Requestor, cuyo nombre de usuario será la url nueva, en caso de que si exista, podrá 
+consultar todos los requestor creado por el mismo y determinara a partir del nombre de cada
+requestor si ya existe dicha url.
+En el caso del endpoint  GET /feeds se enviara un mensaje al actor Coordinator, este mensaje
+contendrá el nombre del usuario. El actor Coordinator al recibir el mensaje llamara al actor
+Usuario correspondiente y le enviara un mensaje solicitando los feeds. El actor Usuario llamara
+a todos sus actores Requestor (recordar que el usuario tiene uno por cada url diferente) y les 
+envía un mensaje solicitando el feed de la url que representa cada uno, estos retornan los feed,
+el actor usuario los almacena y luego se los envía al actor Coordinator el cual retorna la respuesta
+al servidor.
+
+# Punto estrella 2:
+En este caso se creara un actor nuevo Processor, este extiende directamente de la clase Actor, en esta clase se definirán el o los métodos usados para procesar los elementos que concuerdan en
+ambos feeds, tanto atom como rss. Posteriormente se definirá dos clases nuevas, una llamada
+ProcessorAtom y ProcessorRss que heredaran de la clase Processor, estas clases definirán
+nuevos métodos específicos para el parseo de los feeds. Estos actores estarán vinculados a los 
+actores Requestor y dependerá del tipo de Url que representa cada uno, es decir siguiendo con
+la estructura anterior, el actor usuario a medida que va agregando url de las feeds respectivas
+representados por los Requestor, va indicando si es del tipo atom o rss. Al ejecutar el endpoint
+GET /feeds, el Requestor, crea el actor ProcessorAtom o ProcessorRss para parsear el feed que 
+representa.

@@ -39,43 +39,34 @@ import scala.collection.mutable.ListBuffer
 import feedaggregator.server.FeedAggregatorServer._
 
 
- final case class ListFeedItem(list: List[FeedInfo])
- final case class FeedItem(title: String,
-                            link: String,
-                            description: Option[String],
-                            pubDate: String
-                            )
- final case class FeedInfo(title: String,
-                            description: Option[String],
-                            items: List[FeedItem]
-                            )
+  object Coordinator {
+    //Protocolo para Actor Coordinator.
+    case class DateTimeStr(since: Option[String])
+    case class CreateActor(url: String)
 
+    //Respuestas del actor Cordinator
+    case class  UrlOk(url: String)
+  }
 
+  object Requester {
+    //Protocolo para actor Requester
+    case class AsyncRequest(url: String, since: Option[String])
+    
+    //Respuestas del actor Requester
+    case class UrlNotFound(e:Throwable)
+    case class FeedDone(feed:FeedInfo)
 
-  //Protocolo para Actor Coordinator.
-  case class DateTimeStr(since: Option[String])
-  case class CreateActor(url: String)
-
-  //Respuestas del actor Cordinator
-  case class  UrlOk(url: String)
-
-
-
-object Coordinator {
-
-}
-
-
-  //Protocolo para actor Requester
-  case class AsyncRequest(url: String, since: Option[String])
-  
-  //Respuestas del actor Requester
-  case class UrlNotFound(e:Throwable)
-  case class FeedDone(feed:FeedInfo)
-
-object Requester {
-
-}
+    final case class ListFeedItem(list: List[FeedInfo])
+    final case class FeedItem(title: String,
+                              link: String,
+                              description: Option[String],
+                              pubDate: String
+                              )
+    final case class FeedInfo(title: String,
+                              description: Option[String],
+                              items: List[FeedItem]
+                              )
+  }
 
 
 /*Actor coordinador el cual puede recivir dos clases de mensajes:
@@ -87,6 +78,7 @@ object Requester {
 
 class Coordinator extends Actor{
   import Coordinator._
+  import Requester.{UrlNotFound, AsyncRequest}
   import scala.collection.mutable
   import context.dispatcher
   val urls_list = mutable.ListBuffer[ActorRef]()
